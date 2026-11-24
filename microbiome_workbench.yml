@@ -1,0 +1,14 @@
+name: microbiome_workbench
+channels:
+  - biobakery
+  - conda-forge
+  - bioconda
+  - default
+  - defaults
+dependencies:
+  - fastqc=0.13.0
+  - multiqc=1.35
+  - bbmap=40.05
+  - metaphlan=4.2.6
+  - humann=4.0.0a1
+  - kraken2=2.17.2
