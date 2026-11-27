@@ -19,24 +19,15 @@ while getopts ":hi:o:p:r:c:u:n:t:k:m:f:b:xa:js:d" opt; do
     echo "     -h    Print the parameter list below then exit.        "
     echo "                                                            "
     echo " Required analysis parameters                               "
-    echo "     -i    (Required) Directory that contains the raw       "
-    echo "           fastq files to be processed.                     "
-    echo "     -o    (Required) Directory to put output of pipeline.  "
-    echo "     -r    (Required) Path to reference genome file of host."
-    echo "           Should be in FASTA format, and uncompressed.     "
-    echo "     -c    (Required) Path to humann ChocoPhlAn database.   "
-    echo "     -u    (Required) Path to humann UniRef90 database.     "
+    echo "     -i    Forward and reverse fastq files to be processed. "
+    echo "           Specify files as a comma separated list, i.e.,   "
+    echo "           R1.fastq,R2.fastq.                               "
+    echo "     -o    Directory to put output of pipeline.             "
     exit 0
     ;;
-    i) SEQ_DIR=$(echo $OPTARG | sed 's#/$##')
+    i) FILE_STRING="$OPTARG"
     ;;
     o) OUT_DIR=$(echo $OPTARG | sed 's#/$##')
-    ;;
-    r) HOST_REF="$OPTARG"
-    ;;
-    c) CHOCO=$(echo $OPTARG | sed 's#/$##')
-    ;;
-    u) UNIREF=$(echo $OPTARG | sed 's#/$##')
     ;;
     \?) echo "Invalid option: $OPTARG" 1>&2
         exit 1
@@ -47,37 +38,39 @@ while getopts ":hi:o:p:r:c:u:n:t:k:m:f:b:xa:js:d" opt; do
   esac
 done
 
-# Check that valid arguments were entered
+##### CHECK ARGUMENTS #####
 
 # -i
-if [[ -z "$SEQ_DIR" ]]; then
+if [[ -z "$FILE_STRING" ]]; then
   echo "ERROR: Argument -i is required"
-  echo "supply a directory with input fastq files"
   exit 1
 fi
 
-if [[ ! -d "$SEQ_DIR" ]]; then
-  echo "ERROR: Argument -i should be a directory, supply a directory with input fastq files"
+if echo $FILE_STRING | grep -q ","; then
+  :
+else
+  echo "ERROR: Fastq files should be given to -i as R1.fastq,R2.fastq"
   exit 1
 fi
 
-if ls -l $SEQ_DIR | grep -q ".fastq.gz"; then
+if echo $FILE_STRING | grep -q ".fastq.gz"; then
   SEQ_EXT=fastq.gz
-elif ls -l $SEQ_DIR | grep -q ".fastq"; then
+elif echo $FILE_STRING | grep -q ".fastq"; then
   SEQ_EXT=fastq
-elif ls -l $SEQ_DIR | grep -q ".fq.gz"; then
+elif echo $FILE_STRING | grep -q ".fq.gz"; then
   SEQ_EXT=fq.gz
-elif ls -l $SEQ_DIR | grep -q ".fq"; then
+elif echo $FILE_STRING | grep -q ".fq"; then
   SEQ_EXT=fq
 else
-  echo "ERROR: Sequences in input directory should have file extension of either .fastq[.gz] OR .fq[.gz]"
+  echo "ERROR: Fastq file extensions should be .fastq[.gz] OR .fq[.gz]"
   exit 1
 fi
 
-found_1=$(ls -l $SEQ_DIR | grep -q "_R1")
-found_2=$(ls -l $SEQ_DIR | grep -q "_R2")
+found_1=$(echo $FILE_STRING | grep -q "_R1")
+found_2=$(echo $FILE_STRING | grep -q "_R2")
 if [[ -n "$found_1" ]] && [[ -n "$found_2" ]]; then
-  echo "ERROR: Sequences in input directory expected to be paired-end Illumina sequence fastq files whose file names contain the strings '_R1' and '_R2'"
+  echo "ERROR: Sequences in input directory expected to be paired-end Illumina"
+  echo "fastq files whose file names contain the strings '_R1' and '_R2'"
   exit 1
 else
   :
@@ -85,197 +78,19 @@ fi
 
 # -o
 if [[ -z "$OUT_DIR" ]]; then
-  echo "ERROR: Argument -o is required, please supply an output directory"
+  echo "ERROR: Argument -o is required, supply an output directory"
   exit 1
 fi
+
 if [[ ! -d "$OUT_DIR" ]]; then
-  echo "ERROR: Argument -o should be a directory, please supply an output directory"
+  echo "ERROR: Argument -o should be a directory, supply an output directory"
   exit 1
 fi
 
-# -p
-if [[ -z "$PROG_LOAD" ]]; then
-  echo "ERROR: Argument -p is required, please supply a single quoted string of commands needed to load required programs (can be an empty string ' ' if none required)"
-  exit 1
-fi
-
-# -r
-if [[ -z "$HOST_REF" ]]; then
-  echo "ERROR: Argument -r is required, please supply a host genome reference file in FASTA format"
-  exit 1
-fi
-if [[ -d "$HOST_REF" ]]; then
-  echo "ERROR: Argument -r should be a single FASTA file, please supply a host genome reference file in FASTA format"
-  exit 1
-fi
-if ls -l $HOST_REF | grep -q ".fa"; then
-  :
-elif ls -l $HOST_REF | grep -q ".fna"; then
-  :
-elif ls -l $HOST_REF | grep -q ".fasta"; then
-  :
-else
-  echo "ERROR: Expecting host genome reference file to be in FASTA format with extension '.fa', '.fna', or '.fasta'"
-  exit 1
-fi
-
-# -c
-if [[ -z "$CHOCO" ]]; then
-  echo "ERROR: Argument -c is required, please supply path to ChocoPhlAn database directory"
-  exit 1
-fi
-if [[ ! -d "$CHOCO" ]]; then
-  echo "ERROR: Argument -c should be a directory, please supply path to ChocoPhlAn database directory"
-  exit 1
-fi
-
-# -u
-if [[ -z "$UNIREF" ]]; then
-  echo "ERROR: Argument -u is required, please supply path to UniRef database directory"
-  exit 1
-fi
-if [[ ! -d "$UNIREF" ]]; then
-  echo "ERROR: Argument -u should be a directory, please supply path to UniRef database directory"
-  exit 1
-fi
-
-# -n
-if [[ -z "$PARTITION" ]]; then
-  echo "ERROR: Argument -n is required, please supply a node partition name to send jobs to."
-  exit 1
-fi
-PARTITION_1=$(echo $PARTITION | awk -F',' '{print $1}')
-PARTITION_2=$(echo $PARTITION | awk -F',' '{print $2}')
-PARTITION_3=$(echo $PARTITION | awk -F',' '{print $3}')
-PARTITION_4=$(echo $PARTITION | awk -F',' '{print $4}')
-PARTITION_5=$(echo $PARTITION | awk -F',' '{print $5}')
-PARTITION_6=$(echo $PARTITION | awk -F',' '{print $6}')
-PARTITION_7=$(echo $PARTITION | awk -F',' '{print $7}')
-PARTITION_8=$(echo $PARTITION | awk -F',' '{print $8}')
-
-# -t
-if [[ -z "$TIME_REQUEST" ]]; then
-  echo "ERROR: Argument -t is required, please supply a max length of time to run each job for."
-  exit 1
-fi
-TIME_1=$(echo $TIME_REQUEST | awk -F',' '{print $1}')
-TIME_2=$(echo $TIME_REQUEST | awk -F',' '{print $2}')
-TIME_3=$(echo $TIME_REQUEST | awk -F',' '{print $3}')
-TIME_4=$(echo $TIME_REQUEST | awk -F',' '{print $4}')
-TIME_5=$(echo $TIME_REQUEST | awk -F',' '{print $5}')
-TIME_6=$(echo $TIME_REQUEST | awk -F',' '{print $6}')
-TIME_7=$(echo $TIME_REQUEST | awk -F',' '{print $7}')
-TIME_8=$(echo $TIME_REQUEST | awk -F',' '{print $8}')
-
-# -k
-if [[ -z "$CPU_REQUEST" ]]; then
-  echo "ERROR: Argument -k is required, please supply the number of cores being requested to run each job."
-  exit 1
-fi
-CPU_1=$(echo $CPU_REQUEST | awk -F',' '{print $1}')
-CPU_2=$(echo $CPU_REQUEST | awk -F',' '{print $2}')
-CPU_3=$(echo $CPU_REQUEST | awk -F',' '{print $3}')
-CPU_4=$(echo $CPU_REQUEST | awk -F',' '{print $4}')
-CPU_5=$(echo $CPU_REQUEST | awk -F',' '{print $5}')
-CPU_6=$(echo $CPU_REQUEST | awk -F',' '{print $6}')
-CPU_7=$(echo $CPU_REQUEST | awk -F',' '{print $7}')
-CPU_8=$(echo $CPU_REQUEST | awk -F',' '{print $8}')
-
-# -m
-if [[ -z "$MEM_PER_CPU" ]]; then
-  echo "ERROR: Argument -m is required, please supply a memory request for each core of each job."
-  exit 1
-fi
-MEM_1=$(echo $MEM_PER_CPU | awk -F',' '{print $1}')
-MEM_2=$(echo $MEM_PER_CPU | awk -F',' '{print $2}')
-MEM_3=$(echo $MEM_PER_CPU | awk -F',' '{print $3}')
-MEM_4=$(echo $MEM_PER_CPU | awk -F',' '{print $4}')
-MEM_5=$(echo $MEM_PER_CPU | awk -F',' '{print $5}')
-MEM_6=$(echo $MEM_PER_CPU | awk -F',' '{print $6}')
-MEM_7=$(echo $MEM_PER_CPU | awk -F',' '{print $7}')
-MEM_8=$(echo $MEM_PER_CPU | awk -F',' '{print $8}')
-
-# -f
-if [[ -z "$FAIL_EMAIL" ]]; then
-  echo "ERROR: Argument -f is required, please supply an email that can be notified upon failure of any jobs ran during the pipeline"
-  exit 1
-elif echo $FAIL_EMAIL | grep -q -v '@'; then
-  echo "ERROR: Argument -f requires a valid email, please give an email in the form of xxxx@xxxx.xxx"
-fi
-
-# -b
-if [[ ! -z "$BRACKEN" ]]; then
-  if [[ ! -d "$BRACKEN" ]]; then
-    echo "ERROR: Argument -b should be a directory, please supply a the Kraken2 database directory"
-    exit 1
-  fi
-  if [[ ! -f "$BRACKEN/hash.k2d" ]]; then
-    echo "ERROR: Did not find file 'hash.k2d' in supplied Kraken2 database directory, needed for taxonomic profiling"
-    exit 1
-  fi
-  if [[ ! -f "$BRACKEN/opts.k2d" ]]; then
-    echo "ERROR: Did not find file 'opts.k2d' in supplied Kraken2 database directory, needed for taxonomic profiling"
-    exit 1
-  fi
-  if [[ ! -f "$BRACKEN/taxo.k2d" ]]; then
-    echo "ERROR: Did not find file 'taxo.k2d' in supplied Kraken2 database directory, needed for taxonomic profiling"
-    exit 1
-  fi
-  if [[ ! -f "$BRACKEN/database50mers.kmer_distrib" ]]; then
-    echo "ERROR: Did not find file 'database50mers.kmer_distrib' in supplied Kraken2 database directory, was bracken-build ran with '-l 50'?"
-    exit 1
-  fi
-fi
-
-# -m
-if [[ ! -z "$MERGE" ]]; then
-  if [[ -z "$ADAPTERS" ]]; then
-    echo "ERROR: when specifying the -m parameter, the -a parameter must also be specified"
-    exit 1
-  fi
-fi
-
-# -a
-if [[ ! -z "$ADAPTERS" ]]; then
-  if [[ -z "$MERGE" ]]; then
-    echo "ERROR: when specifying the -a parameter, the -m parameter must also be specified"
-    exit 1
-  fi
-  if [[ -d "$ADAPTERS" ]]; then
-    echo "ERROR: Argument -a should be the path to a single file, not a directory, please supply path to the adapters.fa file that comes with BBMerge and BBDuk"
-    exit 1
-  fi
-  if echo $ADAPTERS | grep -q -v "adapters\.fa"; then
-    echo "ERROR: path given to -a does not contain the file name adapters.fa, please supply the adapters.fa file that comes with BBMerge and BBDuk to this argument"
-    exit 1
-  fi
-fi
-
-# -s
-if [[ ! -z "$SKIP" ]]; then
-  if echo $SKIP | grep -q "fastqc_initial"; then
-    :
-  elif echo $SKIP | grep -q "QC"; then
-    :
-  elif echo $SKIP | grep -q "decontam"; then
-    :
-  elif echo $SKIP | grep -q "entropy_filter"; then
-    :
-  elif echo $SKIP | grep -q "fastqc_final"; then
-    :
-  elif echo $SKIP | grep -q "taxonomic_profiling"; then
-    :
-  elif echo $SKIP | grep -q "functional_profiling"; then
-    :
-  else
-    echo "ERROR: Invalid argument given to -s, please specify one or more of: fastqc_initial,QC,decontam,entropy_filter,taxonomic_profiling,functional_profiling"
-    exit 1
-  fi
-fi
-
-###### CREATE DIRECTORY FOR PIPELINE OUTPUT #####
+##### CREATE DIRECTORY FOR PIPELINE OUTPUT #####
 
 DATE=$(date | awk '{print $3"_"$2"_"$6}')
+FILE_NAME=$
 if [ -d "${OUT_DIR}/Metagenomic_Pipeline_${DATE}" ]
 then
 	:

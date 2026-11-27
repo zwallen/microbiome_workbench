@@ -4,7 +4,9 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 
 # Create the conda environment using YAML file
-conda env create -f microbiome_workbench.yml
+if [[ ! -d ~/miniconda3/envs/microbiome_workbench ]]; then
+    conda env create -f microbiome_workbench.yml
+fi
 
 # Activate environment
 conda activate microbiome_workbench
@@ -50,7 +52,6 @@ humann_databases \
 humann_databases \
     --download utility_mapping full \
     ~/miniconda3/envs/microbiome_workbench/opt/humann_databases/
-
 
 echo " "
 echo "*** Microbiome workbench environment setup has completed ***"

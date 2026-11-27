@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Get inputs
-REF_FILE = $1
-OUT_DIR = $2
-CPU = $3
-MAX_MEM = $4
+REF_FILE=$1
+OUT_DIR=$2
+CPU=$3
+MAX_MEM=$4
 
 # Index reference file with bbsplit
 bbsplit.sh \

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Get inputs
-FASTQC_DIR = $1
-OUT_DIR = $2
+FASTQC_DIR=$1
+OUT_DIR=$2
 
 # Run multiqc
 multiqc \
